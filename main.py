@@ -3,11 +3,15 @@ from cacheout import lru_memoize
 from conva_ai import ConvaAI
 from fake_useragent import UserAgent
 from playwright.sync_api import sync_playwright
-import streamlit as st
-import requests
+import os
 import re
+import requests
+import streamlit as st
 
 st.set_page_config(page_title="AI Competitor Analyst - by Conva.AI")
+
+# Hack to get playwright to work properly
+os.system("playwright install")
 
 SEARCH_SUFFIXES = [
     "",
