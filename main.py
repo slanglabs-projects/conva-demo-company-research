@@ -7,6 +7,7 @@ import os
 import re
 import requests
 import streamlit as st
+import tiktoken
 
 st.set_page_config(page_title="AI Competitor Analyst - by Conva.AI")
 
@@ -16,8 +17,7 @@ os.system("playwright install")
 SEARCH_SUFFIXES = [
     "",
     "company metrics",
-    "mission",
-    "vision",
+    "mission and vision",
     "milestones",
     "financial performance",
     "products and services",
@@ -35,10 +35,29 @@ hide_default_format = """
 st.markdown(hide_default_format, unsafe_allow_html=True)
 
 
+def num_tokens_from_string(string: str, model_name: str) -> int:
+    encoding = tiktoken.encoding_for_model(model_name)
+    num_tokens = len(encoding.encode(string))
+    print("num tokens = {}".format(num_tokens))
+    return num_tokens
+
+
 def escape_braces(text: str) -> str:
     text = re.sub(r"(?<!\{)\{(?!\{)", r"{{", text)  # noqa
     text = re.sub(r"(?<!\})\}(?!\})", r"}}", text)  # noqa
     return text
+
+
+def maybe_trim_context(context: str) -> str:
+    length = len(context)
+    tokens = num_tokens_from_string(context, "gpt-4o-mini")
+    start = 0
+    finish = length
+    while tokens > 120 * 1000:
+        finish = int(finish - 0.1 * finish)
+        context = context[start:finish]
+        tokens = num_tokens_from_string(context, "gpt-4o-mini")
+    return context
 
 
 @lru_memoize()
@@ -128,7 +147,7 @@ if st.session_state.ready and st.session_state.company_id:
         params = {
             "q": st.session_state.company_id + " " + suffix,
             "textFormat": "HTML",
-            "count": 5,
+            "count": 3,
         }
         response = requests.get(
             "https://api.bing.microsoft.com/v7.0/search",
@@ -169,7 +188,9 @@ if st.session_state.ready and st.session_state.company_id:
 
     progress += 5
     pb.progress(progress, "Generating report...")
-    capability_context = {"company_report_generation": escape_braces(context).strip()}
+    capability_context = {
+        "company_report_generation": maybe_trim_context(escape_braces(context).strip())
+    }
 
     response = client.invoke_capability_name(
         query="Generate a detailed report for the company whose details are provided. ({})".format(
